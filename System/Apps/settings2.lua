@@ -13,9 +13,14 @@ local alignX = objectManager.getByTag("CategoryList").hitbox.endX + 3
 
 objectManager.addObject(objectify.createObject.dropdown("General_Language",alignX,3,15,4,fs.list("/System/lang/"))).display = false
 
-objectManager.addObject(objectify.createObject.switch("Graphics_Animations",alignX,3,not settings.noAnim)).display = false
+objectManager.addObject(objectify.createObject.dropdown("Graphics_Background",alignX,3,10,5,langStrings.firstboot_colors)).display = false
+objectManager.addObject(objectify.createObject.dropdown("Graphics_Theme",alignX,6,10,5,langStrings.firstboot_themes)).display = false
+objectManager.addObject(objectify.createObject.switch("Graphics_Shadows",alignX,9,not settings.dontDoMenuShadows)).display = false
+objectManager.addObject(objectify.createObject.switch("Graphics_Animations",alignX,12,not settings.noAnim)).display = false
 
 objectManager.getByTag("General_Language").setSelectedString(settings.langPack)
+objectManager.getByTag("Graphics_Background").setSelected(settings.background_selected)
+objectManager.getByTag("Graphics_Theme").setSelected(settings.theme)
 
 local function redrawScreen()
 	term.setBackgroundColor(colors.white)
@@ -40,6 +45,15 @@ local function redrawScreen()
 			objectManager.getByTag("General_Language").display = true
 		elseif objectManager.getByTag("CategoryList").selected[1] == 2 then
 			term.setCursorPos(alignX,2)
+			write(langStrings.settings_background)
+			objectManager.getByTag("Graphics_Background").display = true
+			term.setCursorPos(alignX,5)
+			write(langStrings.firstboot_theme)
+			objectManager.getByTag("Graphics_Theme").display = true
+			term.setCursorPos(alignX,8)
+			write(langStrings.firstboot_shadows)
+			objectManager.getByTag("Graphics_Shadows").display = true
+			term.setCursorPos(alignX,11)
 			write(langStrings.settings_animations)
 			objectManager.getByTag("Graphics_Animations").display = true
 		end
@@ -74,6 +88,46 @@ while true do
 						v.expand()
 						v.setSelected(v.getNewSelection())
 						settings.langPack = v.getSelected()
+					elseif v.tag == "Graphics_Background" then
+						v.expand()
+						v.setSelected(v.getNewSelection())
+						if objectManager.getByTag("Graphics_Background").selected then
+							local backgroundColor = bit.blshift(1,objectManager.getByTag("Graphics_Background").selected - 1)
+							if backgroundColor == 0 then
+								backgroundColor = 1
+							end
+							for k,v in pairs(colors) do
+								if v == backgroundColor then
+									settings.background = k
+									break
+								end
+							end
+							settings.background_selected = objectManager.getByTag("Graphics_Background").selected
+						end
+					elseif v.tag == "Graphics_Theme" then
+						v.expand()
+						v.setSelected(v.getNewSelection())
+						if objectManager.getByTag("Graphics_Theme").selected then
+							if objectManager.getByTag("Graphics_Theme").selected == 1 then
+								settings.topBarColor = "white"
+								settings.topBarTextColor = "gray"
+								settings.menuBackground = "white"
+								settings.menuText = "black"
+								settings.menuHighlight = "lightBlue"
+								settings.menuInactive = "lightGray"
+							elseif objectManager.getByTag("Graphics_Theme").selected == 2 then
+								settings.topBarColor = "gray"
+								settings.topBarTextColor = "lightGray"
+								settings.menuBackground = "gray"
+								settings.menuText = "white"
+								settings.menuHighlight = "lightBlue"
+								settings.menuInactive = "lightGray"
+							end
+							settings.theme = objectManager.getByTag("Graphics_Theme").selected
+						end
+					elseif v.tag == "Graphics_Shadows" then
+						v.toggle()
+						settings.dontDoMenuShadows = not settings.dontDoMenuShadows
 					elseif v.tag == "Graphics_Animations" then
 						v.toggle()
 						settings.noAnim = not settings.noAnim
@@ -85,6 +139,8 @@ while true do
 				end
 			end
 		end
+	elseif e[1] == "EmilOS_ReloadSettings" then
+		settings = framework.getSettings()
 	elseif e[1] == "term_resize" then
 		redrawScreen()
 	elseif e[1] == "terminate" then

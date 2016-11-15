@@ -358,6 +358,8 @@ if firstTimeBoot then
 		menuHighlight = "lightBlue",
 		menuInactive = "lightGray",
 		dontDoMenuShadows = false,
+		theme = 1,
+		background_selected = 8,
 		
 		fullClock = true,
 		dontCheckOnStartup = false,
@@ -677,7 +679,7 @@ if firstTimeBoot then
 				term.setCursorPos(3,1)
 				print("EmilOS")
 				variables.topBarColor = "white"
-				variables.topBarTextColor = "black"
+				variables.topBarTextColor = "gray"
 				variables.menuBackground = "white"
 				variables.menuText = "black"
 				variables.menuHighlight = "lightBlue"
@@ -713,12 +715,14 @@ if firstTimeBoot then
 							term.setBackgroundColor(colors.white)
 							term.clear()
 							redrawScreen()
+							variables.background_selected = v.selected
 						elseif v.tag == "ThemeSelect" then
 							v.expand()
 							v.setSelected(v.getNewSelection())
 							term.setBackgroundColor(colors.white)
 							term.clear()
 							redrawScreen()
+							variables.theme = v.selected
 						elseif v.tag == "ShadowsSwitch" then
 							v.toggle()
 							variables.dontDoMenuShadows = not v.state
@@ -897,6 +901,8 @@ if firstTimeBoot then
 		settings.fullClock = variables.fullClock
 		settings.dontCheckOnStartup = variables.dontCheckOnStartup
 		settings.serverUrl = variables.serverUrl
+		settings.theme = variables.theme
+		settings.background_selected = variables.background_selected
 		
 		for k,v in pairs(colors) do
 			if v == variables.background then

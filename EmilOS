@@ -737,7 +737,7 @@ local function openSidebar(bSidebarIsOpen)
 	end
 end
 local function showSearchBar()
-	local appList = {langStrings.appstore_appname,langStrings.settings_appname,langStrings.emilosmenu_shutdown,langStrings.emilosmenu_reboot}
+	local appList = {langStrings.appstore_appname,langStrings.settings_appname,langStrings.emilosmenu_shell,langStrings.emilosmenu_shutdown,langStrings.emilosmenu_reboot}
 	local searchString = ""
 	local returnList = {}
 	local didDoShadows = false
@@ -866,12 +866,31 @@ local function showSearchBar()
 					sleep(0.2)
 					if fs.exists("Apps/"..returnList[1]) then
 						local appManifest = framework.getManifest(returnList[1])
-						if fs.exists("Apps/"..returnList[1].."/"..appManifest.launchScript) then
-							shell.run("Apps/"..returnList[1].."/"..appManifest.launchScript)
-							appsWindow.reposition(1,2)
+						if runningProgramName and runningProgramName == returnList[1] then
+							os.queueEvent("mouse_click",1,1,19)
+						else
+							programWindow = window.create(term.current(),1,19,51,19)
+							term.redirect(programWindow)
+							currentRunningThread = coroutine.create(function() shell.run("/Apps/"..returnList[1].."/"..appManifest.launchScript) end)
+							coroutine.resume(currentRunningThread)
+							term.redirect(thisWindow)
+							for i=19,1,-3 do
+								sleep(0.001)
+								programWindow.reposition(1,i)
+							end
+							programFocused = true
+							runningProgramName = returnList[1]
 						end
+						appsWindow.reposition(1,2)
+						term.setCursorBlink(false)
 					elseif fs.exists("System/Apps/"..returnList[1]) then
-						shell.run("System/Apps/"..returnList[1])
+						if returnList[1] == langStrings.settings_appname then
+							launchSystemApp.settings()
+						elseif returnList[1] == langStrings.appstore_appname then
+							launchSystemApp.appStore()
+						elseif returnList[1] == langStrings.emilosmenu_shell then
+							launchSystemApp.shell()
+						end
 						appsWindow.reposition(1,2)
 					else
 						if returnList[1] == "CD" then
@@ -974,15 +993,7 @@ local function handleAppClickEvent()
 		showContext()
 	elseif selectedApp == "CD" then
 		nSidebarPage = 3
-		if multishell then
-			if multishell.getCount() > 1 then
-				os.queueEvent("mouse_click",1,50,2)
-			else
-				os.queueEvent("mouse_click",1,50,1)
-			end
-		else
-			os.queueEvent("mouse_click",1,50,1)
-		end
+		os.queueEvent("mouse_click",1,50,1)
 	elseif selectedApp ~= "Disk" then
 		framework.clearPopup()
 		local appManifest = framework.getManifest(selectedApp)
@@ -994,10 +1005,13 @@ local function handleAppClickEvent()
 			currentRunningThread = coroutine.create(function() shell.run("/Apps/"..selectedApp.."/"..appManifest.launchScript) end)
 			coroutine.resume(currentRunningThread)
 			term.redirect(thisWindow)
-			for i=19,1,-3 do
-				sleep(0.001)
-				programWindow.reposition(1,i)
+			if not settings.noAnim then
+				for i=19,1,-3 do
+					sleep(0.001)
+					programWindow.reposition(1,i)
+				end
 			end
+			programWindow.reposition(1,1)
 			programFocused = true
 			runningProgramName = selectedApp
 		end
@@ -1018,6 +1032,55 @@ local function addSystemApp(object)
 	term.redirect(thisWindow)
 	table.insert(floatingSystemApps,object)
 end
+
+local launchSystemApp = {
+	settings = function()
+		local settingsCoroutine = coroutine.create(function() shell.run("/System/Apps/settings2.lua") end)
+		local settingsWindowContainer = window.create(term.current(),2,3,30,16)
+		local settingsWindow = window.create(settingsWindowContainer,1,2,30,15)
+		addSystemApp({
+			["coroutine"] = settingsCoroutine,
+			["containerWindow"] = settingsWindowContainer,
+			["appWindow"] = settingsWindow,
+			["order"] = 1,
+			["name"] = langStrings.emilosmenu_settings,
+			["id"] = math.random(),
+			["isFocused"] = false,
+		})
+		settingsCoroutine, settingsWindowContainer, settingsWindow = nil, nil, nil
+	end,
+	appStore = function()
+		local appStoreCoroutine = coroutine.create(function() shell.run("/System/Apps/appStore") end)
+		local appStoreWindowContainer = window.create(term.current(),1,2,51,18)
+		local appStoreWindow = window.create(appStoreWindowContainer,1,2,51,17)
+		addSystemApp({
+			["coroutine"] = appStoreCoroutine,
+			["containerWindow"] = appStoreWindowContainer,
+			["appWindow"] = appStoreWindow,
+			["order"] = 1,
+			["name"] = langStrings.emilosmenu_appstore,
+			["id"] = math.random(),
+			["isFocused"] = false,
+		})
+		appStoreCoroutine, appStoreWindowContainer, appStoreWindow = nil, nil, nil
+	end,
+	shell = function()
+		local shellCoroutine = coroutine.create(function() shell.run("/rom/programs/shell") end)
+		local shellWindowContainer = window.create(term.current(),2,3,30,12)
+		local shellWindow = window.create(shellWindowContainer,1,2,30,11)
+		addSystemApp({
+			["coroutine"] = shellCoroutine,
+			["containerWindow"] = shellWindowContainer,
+			["appWindow"] = shellWindow,
+			["order"] = 1,
+			["name"] = langStrings.emilosmenu_shell,
+			["id"] = math.random(),
+			["isFocused"] = false,
+		})
+		shellCoroutine, shellWindowContainer, shellWindow = nil, nil, nil
+	end
+}
+
 _G.customFunctions.EmilOS_UpdateFound = function()
 	shell.run("System/Apps/appStore System")
 end
@@ -1073,47 +1136,11 @@ while true do
 					emilworks.popupMsg(colors.lime,"3","","EmilOS "..versionText,pText,"","(c) 2016 Emil Inc.")
 					parallel.waitForAny(function() os.pullEvent("mouse_click") end,function() os.pullEvent("key") end)
 				elseif cB == 3 then
-					local settingsCoroutine = coroutine.create(function() shell.run("/System/Apps/settings2.lua") end)
-					local settingsWindowContainer = window.create(term.current(),2,3,30,13)
-					local settingsWindow = window.create(settingsWindowContainer,1,2,30,12)
-					addSystemApp({
-						["coroutine"] = settingsCoroutine,
-						["containerWindow"] = settingsWindowContainer,
-						["appWindow"] = settingsWindow,
-						["order"] = 1,
-						["name"] = langStrings.emilosmenu_settings,
-						["id"] = math.random(),
-						["isFocused"] = false,
-					})
-					settingsCoroutine, settingsWindowContainer, settingsWindow = nil, nil, nil
+					launchSystemApp.settings()
 				elseif cB == 4 then
-					local appStoreCoroutine = coroutine.create(function() shell.run("/System/Apps/appStore") end)
-					local appStoreWindowContainer = window.create(term.current(),1,2,51,18)
-					local appStoreWindow = window.create(appStoreWindowContainer,1,2,51,17)
-					addSystemApp({
-						["coroutine"] = appStoreCoroutine,
-						["containerWindow"] = appStoreWindowContainer,
-						["appWindow"] = appStoreWindow,
-						["order"] = 1,
-						["name"] = langStrings.emilosmenu_appstore,
-						["id"] = math.random(),
-						["isFocused"] = false,
-					})
-					appStoreCoroutine, appStoreWindowContainer, appStoreWindow = nil, nil, nil
+					launchSystemApp.appStore()
 				elseif cB == 5 then
-					local shellCoroutine = coroutine.create(function() shell.run("/rom/programs/shell") end)
-					local shellWindowContainer = window.create(term.current(),2,3,30,12)
-					local shellWindow = window.create(shellWindowContainer,1,2,30,11)
-					addSystemApp({
-						["coroutine"] = shellCoroutine,
-						["containerWindow"] = shellWindowContainer,
-						["appWindow"] = shellWindow,
-						["order"] = 1,
-						["name"] = langStrings.emilosmenu_shell,
-						["id"] = math.random(),
-						["isFocused"] = false,
-					})
-					shellCoroutine, shellWindowContainer, shellWindow = nil, nil, nil
+					launchSystemApp.shell()
 				elseif cB == 7 then
 					if emilworks.popupMsg(colors.lime,"6","",langStrings.emilos_rebootnow) == true then
 						os.queueEvent("reboot")
@@ -1379,6 +1406,18 @@ while true do
 				coroutine.resume(currentRunningThread,"EmilOS_ReloadSettings")
 				term.redirect(thisWindow)
 			end
+			if #floatingSystemApps > 0 then
+				for k,v in pairs(floatingSystemApps) do
+					term.redirect(v.containerWindow)
+					paintutils.drawLine(1,1,v.containerWindow.getSize(),1,colors[settings.topBarColor] or colors.white)
+					term.setCursorPos(3,1)
+					term.setTextColor(colors[settings.topBarTextColor] or colors.black)
+					write(v.name)
+					term.setCursorPos(v.containerWindow.getSize() - 2,1)
+					write("x")
+					term.redirect(thisWindow)
+				end
+			end
 		elseif e == "terminate" then
 			os.queueEvent("shutdown")
 			return
@@ -1409,15 +1448,16 @@ while true do
 											while true do
 												local event = {os.pullEvent()}
 												if event[1] == "mouse_drag" then
-													if event[4] > 1 then
-														v.containerWindow.reposition(event[3] - dragOffset,event[4])
-														sendToProgram = false
-														drawMain()
-														for k2,v2 in pairs(floatingSystemApps) do
-															v.containerWindow.redraw()
-														end
+													if event[4] == 1 then
+														event[4] = 2
+													end
+													v.containerWindow.reposition(event[3] - dragOffset,event[4])
+													sendToProgram = false
+													drawMain()
+													for k2,v2 in pairs(floatingSystemApps) do
 														v.containerWindow.redraw()
 													end
+													v.containerWindow.redraw()
 												elseif event[1] == "timer" and event[2] == ClockID then
 													drawClock()
 												elseif event[1] == "mouse_up" then
