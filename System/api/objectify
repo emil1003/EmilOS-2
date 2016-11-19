@@ -7,6 +7,104 @@ modes = {
 	MULTI_SELECT = 2,
 }
 
+styles = {
+	default = {
+		textView = {
+			textColor = "black",
+			backgroundColor = "inherit",
+		},
+		button = {
+			normal = {
+				textColor = "black",
+				backgroundColor = "lightGray",
+			},
+			disabled = {
+				textColor = "gray",
+				backgroundColor = "lightGray",
+			},
+			highlighted = {
+				textColor = "white",
+				backgroundColor = "lightBlue",
+			},
+		},
+		textInput = {
+			textColor = "black",
+			backgroundColor = "lightGray",
+			placeholderTextColor = "gray",
+		},
+		dropdown = {
+			normal = {
+				textColor = "black",
+				backgroundColor = "lightGray",
+			},
+			highlighted = {
+				textColor = "white",
+				backgroundColor = "lightBlue",
+			},
+		},
+		switch = {
+			offState = {
+				track = {
+					char = string.char(127),
+					textColor = "lightGray",
+					backgroundColor = "inherit",
+				},
+				knob = {
+					char = " ",
+					textColor = "inherit",
+					backgroundColor = "gray",
+				},
+			},
+			onState = {
+				track = {
+					char = " ",
+					textColor = "inherit",
+					backgroundColor = "lightBlue",
+				},
+				knob = {
+					char = " ",
+					textColor = "inherit",
+					backgroundColor = "gray",
+				},
+			},
+		},
+		selectableList = {
+			normal = {
+				textColor = "black",
+				backgroundColor = "inherit",
+			},
+			highlighted = {
+				textColor = "white",
+				backgroundColor = "lightBlue",
+			},
+		},
+	},
+}
+
+internals = {
+	setColors = function(styleColors)
+		local inheritColors = {
+			textColor = term.getTextColor(),
+			backgroundColor = term.getBackgroundColor(),
+		}
+		if styleColors.textColor ~= "inherit" then
+			term.setTextColor(colors[styleColors.textColor])
+		end
+		if styleColors.backgroundColor ~= "inherit" then
+			term.setBackgroundColor(colors[styleColors.backgroundColor])
+		end
+		return inheritColors
+	end,
+	restoreColors = function(inheritColors)
+		if inheritColors.textColor then
+			term.setTextColor(inheritColors.textColor)
+		end			
+		if inheritColors.backgroundColor then
+			term.setBackgroundColor(inheritColors.backgroundColor)
+		end
+	end,
+}
+
 function objectManager() -- Object Manager, for storing and easily interacting with objects
 	local objectManager = {}
 	objectManager.list = {}
@@ -57,6 +155,12 @@ function objectManager() -- Object Manager, for storing and easily interacting w
 		end
 		return false
 	end
+
+	objectManager.executeOnAll = function(func)
+		for num,object in pairs(objectManager.list) do
+			func(object)
+		end
+	end
 	
 	return objectManager
 end
@@ -64,17 +168,22 @@ end
  -- Creatable objects
 
 createObject = {
-	textView = function(tag,x,y,text,background,textColor)
+	textView = function(tag,x,y,text)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.text = tostring(text) or ""
+			object.length = object.text:len()
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
 		object.type = "textView"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.text = tostring(text) or ""
-		object.length = object.text:len()
-		object.background = background or term.getBackgroundColor()
-		object.textColor = textColor or term.getTextColor()
-		object.display = true
+		if not object.style then
+			object.style = objectify.styles.default
+		end
 		
 		object.hitbox = {
 			startX = object.posX,
@@ -84,10 +193,10 @@ createObject = {
 		}
 		
 		object.show = function()
+			local inheritColors = internals.setColors(object.style.textView)
 			term.setCursorPos(object.posX,object.posY)
-			term.setBackgroundColor(object.background)
-			term.setTextColor(object.textColor)
 			write(object.text)
+			internals.restoreColors(inheritColors)
 		end
 		
 		object.setText = function(text)
@@ -99,17 +208,27 @@ createObject = {
 		
 	button = function(tag,x,y,buttonText,onclick,enabled)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = tostring(buttonText):len() + 2
+			object.buttonText = tostring(buttonText)
+			object.enabled = enabled
+			object.onClickFunction = onclick
+			object.highlighted = false
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
+		if not object.style then
+			object.style = objectify.styles.default
+		end
+		if object.enabled == nil then
+			object.enabled = true
+		end
 		object.type = "button"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.length = tostring(buttonText):len() + 2
-		object.buttonText = tostring(buttonText)
-		object.enabled = enabled
-		object.onClickFunction = onclick
-		object.highlighted = false
-		object.display = true
-		
+
 		object.hitbox = {
 			startX = object.posX,
 			startY = object.posY,
@@ -117,19 +236,16 @@ createObject = {
 			endY = object.posY
 		}
 		
-		if object.enabled == nil then
-			object.enabled = true
-		end
-		
 		object.show = function()
-			term.setBackgroundColor(colors.lightGray)
+			local inheritColors = nil
 			if object.enabled then
-				term.setTextColor(colors.black)
+				inheritColors = internals.setColors(object.style.button.normal)
 			else
-				term.setTextColor(colors.gray)
+				inheritColors = internals.setColors(object.style.button.disabled)
 			end
 			term.setCursorPos(object.posX,object.posY)
 			write(" "..object.buttonText.." ")
+			internals.restoreColors(inheritColors)
 			object.highlighted = false
 			
 			object.hitbox = {
@@ -142,10 +258,10 @@ createObject = {
 		
 		object.highlight = function()
 			if object.enabled and object.display then
-				term.setBackgroundColor(colors.lightBlue)
-				term.setTextColor(colors.white)
+				local inheritColors = internals.setColors(object.style.button.highlighted)
 				term.setCursorPos(object.posX,object.posY)
 				write(" "..object.buttonText.." ")
+				internals.restoreColors(inheritColors)
 				object.highlighted = true
 			end
 		end			
@@ -168,16 +284,23 @@ createObject = {
 	
 	textInput = function(tag,x,y,length,returnOnClick,placeholder,hideInput)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = length
+			object.returnOnClick = returnOnClick or false
+			object.input = ""
+			object.placeholder = placeholder
+			object.hideInput = hideInput or false
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
 		object.type = "textInput"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.length = length
-		object.returnOnClick = returnOnClick or false
-		object.input = ""
-		object.placeholder = placeholder
-		object.hideInput = hideInput or false
-		object.display = true
+		if not object.style then
+			object.style = objectify.styles.default
+		end
 		
 		object.hitbox = {
 			startX = object.posX,
@@ -187,11 +310,11 @@ createObject = {
 		}
 		
 		object.show = function()
-			paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors.lightGray)
+			local inheritColors = internals.setColors(object.style.textInput)
+			paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors[object.style.textInput.backgroundColor])
 			term.setCursorPos(object.posX + 1,object.posY)
-			term.setTextColor(colors.black)
 			if object.input == "" and object.placeholder then
-				term.setTextColor(colors.gray)
+				term.setTextColor(colors[object.style.textInput.placeholderTextColor])
 				write(object.placeholder)
 			else
 				if object.hideInput then
@@ -202,7 +325,7 @@ createObject = {
 					write(object.input)
 				end
 			end
-			term.setTextColor(colors.black)
+			internals.restoreColors(inheritColors)
 			
 			object.hitbox = {
 				startX = object.posX,
@@ -213,18 +336,18 @@ createObject = {
 		end
 		
 		object.onClick = function()
+			local inheritColors = internals.setColors(object.style.textInput)
 			if object.placeholder then
-				paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors.lightGray)
+				paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors[object.style.textInput.backgroundColor])
 			end
 			term.setCursorPos(object.posX + 1,object.posY)
-			term.setBackgroundColor(colors.lightGray)
-			term.setTextColor(colors.black)
 			os.queueEvent("paste",object.input)
 			if object.hideInput then
 				object.input = framework.read("\7",nil,nil,object.returnOnClick) or ""
 			else
 				object.input = framework.read(nil,nil,nil,object.returnOnClick) or ""
 			end
+			internals.restoreColors(inheritColors)
 		end
 		
 		return object
@@ -232,16 +355,23 @@ createObject = {
 	
 	dropdown = function(tag,x,y,length,maxEntriesShown,entries)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = length
+			object.maxEntriesShown = maxEntriesShown
+			object.entries = entries or {}
+			object.selected = nil
+			object.isExpanded = false
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
 		object.type = "dropdown"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.length = length
-		object.maxEntriesShown = maxEntriesShown
-		object.entries = entries or {}
-		object.selected = nil
-		object.isExpanded = false
-		object.display = true
+		if not object.style then
+			object.style = objectify.styles.default
+		end
 		
 		object.hitbox = {
 			startX = object.posX,
@@ -251,8 +381,8 @@ createObject = {
 		}
 		
 		object.show = function()
-			paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors.lightGray)
-			term.setTextColor(colors.black)
+			local inheritColors = internals.setColors(object.style.dropdown.normal)
+			paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors[object.style.dropdown.normal.backgroundColor])
 			term.setCursorPos(object.posX + 1,object.posY)
 			if object.selected and object.selected ~= 0 then
 				write(string.sub(object.entries[object.selected],1,object.length - 3))
@@ -260,6 +390,7 @@ createObject = {
 			term.setTextColor(colors.gray)
 			term.setCursorPos(object.posX + object.length - 1,object.posY)
 			write(string.char(31))
+			internals.restoreColors(inheritColors)
 			object.isExpanded = false
 			
 			object.hitbox = {
@@ -366,13 +497,20 @@ createObject = {
 	
 	switch = function(tag,x,y,state)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = 2
+			object.state = state or false
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
 		object.type = "switch"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.length = 2
-		object.state = state or false
-		object.display = true
+		if not object.style then
+			object.style = objectify.styles.default
+		end
 		
 		object.hitbox = {
 			startX = object.posX,
@@ -382,19 +520,22 @@ createObject = {
 		}
 		
 		object.show = function()
+			local inheritColors = nil
 			term.setCursorPos(object.posX,object.posY)
 			if object.state then
-				term.setBackgroundColor(colors.lightBlue)
-				write("  ")
-				term.setBackgroundColor(colors.gray)
-				write(" ")
+				inheritColors = internals.setColors(object.style.switch.onState.track)
+				write(object.style.switch.onState.track.char..object.style.switch.onState.track.char)
+				internals.restoreColors(inheritColors)
+				internals.setColors(object.style.switch.onState.knob)
+				write(object.style.switch.onState.knob.char)
 			else
-				term.setBackgroundColor(colors.gray)
-				write(" ")
-				term.setBackgroundColor(colors.lightGray)
-				term.setTextColor(colors.white)
-				write(string.char(127)..string.char(127))
+				inheritColors = internals.setColors(object.style.switch.offState.knob)
+				write(object.style.switch.offState.knob.char)
+				internals.restoreColors(inheritColors)
+				internals.setColors(object.style.switch.offState.track)
+				write(object.style.switch.offState.track.char..object.style.switch.offState.track.char)
 			end
+			internals.restoreColors(inheritColors)
 			
 			object.hitbox = {
 				startX = object.posX,
