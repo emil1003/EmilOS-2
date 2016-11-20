@@ -1,5 +1,4 @@
  -- Objectify, a Objective framework
- -- (Depends on framework API)
  -- (c) 2016 Emil Inc. All Rights Reserved.
 
 modes = {
@@ -76,6 +75,10 @@ styles = {
 			highlighted = {
 				textColor = "white",
 				backgroundColor = "lightBlue",
+			},
+			disabled = {
+				textColor = "lightGray",
+				backgroundColor = "inherit",
 			},
 		},
 	},
@@ -159,6 +162,12 @@ function objectManager() -- Object Manager, for storing and easily interacting w
 	objectManager.executeOnAll = function(func)
 		for num,object in pairs(objectManager.list) do
 			func(object)
+		end
+	end
+
+	objectManager.setGlobalStyle = function(style)
+		for num,object in pairs(objectManager.list) do
+			object.style = style
 		end
 	end
 	
@@ -282,14 +291,13 @@ createObject = {
 		return object
 	end,
 	
-	textInput = function(tag,x,y,length,returnOnClick,placeholder,hideInput)
+	textInput = function(tag,x,y,length,placeholder,hideInput)
 		local object = {}
 		if type(tag) == "string" then
 			object.tag = tag
 			object.posX = x
 			object.posY = y
 			object.length = length
-			object.returnOnClick = returnOnClick or false
 			object.input = ""
 			object.placeholder = placeholder
 			object.hideInput = hideInput or false
@@ -341,11 +349,23 @@ createObject = {
 				paintutils.drawLine(object.posX,object.posY,object.posX + object.length,object.posY,colors[object.style.textInput.backgroundColor])
 			end
 			term.setCursorPos(object.posX + 1,object.posY)
-			os.queueEvent("paste",object.input)
+			local replaceChar = nil
 			if object.hideInput then
-				object.input = framework.read("\7",nil,nil,object.returnOnClick) or ""
-			else
-				object.input = framework.read(nil,nil,nil,object.returnOnClick) or ""
+				replaceChar = string.char(7)
+			end
+			local inputCoroutine = coroutine.create(function() object.input = read(replaceChar) end)
+			coroutine.resume(inputCoroutine)
+			os.queueEvent("paste",object.input)
+			while true do
+				local event = {os.pullEventRaw()}
+				coroutine.resume(inputCoroutine,table.unpack(event))
+				if event[1] == "mouse_click" then
+					coroutine.resume(inputCoroutine,"key",keys.enter)
+					os.queueEvent(table.unpack(event))
+					break
+				elseif event[1] == "key" and event[2] == keys.enter then
+					break
+				end
 			end
 			internals.restoreColors(inheritColors)
 		end
@@ -554,16 +574,23 @@ createObject = {
 	
 	selectableList = function(tag,x,y,length,mode,entries)
 		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = length
+			object.mode = mode or objectify.modes.SINGLE_SELECT
+			object.entries = entries or {}
+			object.selected = {}
+			object.enabled = true
+			object.display = true
+		elseif type(tag) == "table" then
+			object = tag
+		end
 		object.type = "selectableList"
-		object.tag = tag
-		object.posX = x
-		object.posY = y
-		object.length = length
-		object.mode = mode or objectify.modes.SINGLE_SELECT
-		object.entries = entries or {}
-		object.selected = {}
-		object.enabled = true
-		object.display = true
+		if not object.style then
+			object.style = objectify.styles.default
+		end
 		
 		object.hitbox = {
 			startX = object.posX,
@@ -573,29 +600,27 @@ createObject = {
 		}
 		
 		object.show = function()
-			term.setBackgroundColor(colors.white)
+			local inheritColors = internals.setColors(object.style.selectableList.normal)
 			for i=1,#object.entries do
 				if object.entries[i] then
 					term.setCursorPos(object.posX,object.posY + i - 1)
 					if object.enabled then
-						term.setTextColor(colors.black)
-						term.setBackgroundColor(colors.white)
+						internals.setColors(object.style.selectableList.normal)
 						for i2=1,#object.selected do
 							if object.selected[i2] == i then
-								paintutils.drawLine(object.posX,object.posY + i - 1,object.hitbox.endX,object.posY + i - 1,colors.lightBlue)
+								paintutils.drawLine(object.posX,object.posY + i - 1,object.hitbox.endX,object.posY + i - 1,colors[object.style.selectableList.highlighted.backgroundColor])
 								term.setCursorPos(object.posX,object.posY + i - 1)
-								term.setTextColor(colors.white)
-								term.setBackgroundColor(colors.lightBlue)
+								internals.setColors(object.style.selectableList.highlighted)
 								break
 							end
 						end
 						write(" "..object.entries[i].." ")
 					else
-						term.setTextColor(colors.lightGray)
-						term.setBackgroundColor(colors.white)
+						internals.setColors(object.style.selectableList.disabled)
 						write(" "..object.entries[i].." ")
 					end
 				end
+				internals.restoreColors(inheritColors)
 			end
 			
 			object.hitbox = {

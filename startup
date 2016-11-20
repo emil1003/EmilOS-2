@@ -555,9 +555,9 @@ if firstTimeBoot then
 		term.clear()
 		
 		local objectManager = objectify.objectManager()
-		objectManager.addObject(objectify.createObject.textInput("UsernameInput",8,10,25,true,langStrings.firstboot_username))
-		objectManager.addObject(objectify.createObject.textInput("PasswordInput1",8,12,25,true,langStrings.firstboot_password,true))
-		objectManager.addObject(objectify.createObject.textInput("PasswordInput2",8,14,25,true,langStrings.firstboot_passwordagain,true))
+		objectManager.addObject(objectify.createObject.textInput("UsernameInput",8,10,25,langStrings.firstboot_username))
+		objectManager.addObject(objectify.createObject.textInput("PasswordInput1",8,12,25,langStrings.firstboot_password,true))
+		objectManager.addObject(objectify.createObject.textInput("PasswordInput2",8,14,25,langStrings.firstboot_passwordagain,true))
 		objectManager.addObject(objectify.createObject.button("PreviousScreen",2,17,"\27"))
 		objectManager.addObject(objectify.createObject.button("NextScreen",38,17,"\26",nil,false))
 		
@@ -812,8 +812,8 @@ if firstTimeBoot then
 		local loginButtonX = math.ceil(math.ceil((w / 2) - (#langStrings.firstboot_login + 2 / 2)), 0)+1
 		
 		local objectManager = objectify.objectManager()
-		objectManager.addObject(objectify.createObject.textInput("UsernameInput",9,9,24,true,langStrings.firstboot_username))
-		objectManager.addObject(objectify.createObject.textInput("PasswordInput",9,11,24,true,langStrings.firstboot_password,true))
+		objectManager.addObject(objectify.createObject.textInput("UsernameInput",9,9,24,langStrings.firstboot_username))
+		objectManager.addObject(objectify.createObject.textInput("PasswordInput",9,11,24,langStrings.firstboot_password,true))
 		objectManager.addObject(objectify.createObject.button("LoginButton",loginButtonX,13,langStrings.firstboot_login,false))
 		objectManager.addObject(objectify.createObject.button("PreviousScreen",2,17,"\27"))
 		objectManager.addObject(objectify.createObject.button("NextScreen",38,17,"\26",nil,false))
