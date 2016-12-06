@@ -245,7 +245,7 @@ local function drawMain(endWithMain)
 	else
 		framework.clearPopup()
 		drawMainBar()
-		drawApps()
+		--drawApps()
 		if not endWithMain then
 			if currentRunningThread then
 				programWindow.redraw()
@@ -444,7 +444,7 @@ local function showContext()
 							dataSize = dataSize + fs.getSize("Apps/data/"..selectedApp.."/"..v)
 						end
 					end
-					write("Data: "..dataSize.." B")
+					write("Data: "..round(dataSize / 1024,2).." kB")
 					term.setBackgroundColor(colors.lightGray)
 					term.setTextColor(colors.black)
 					term.setCursorPos(3,15)
@@ -1087,12 +1087,14 @@ end
 
  -- On boot screen draw
 getInstalledApps()
+drawApps()
 drawMain()
 ClockID = os.startTimer(0.2)
 
  -- Main loop
 while true do
 	if clicked then
+		drawApps()
 		drawMain()
 		ClockID = os.startTimer(0.2)
 		clicked = false
@@ -1443,6 +1445,9 @@ while true do
 											term.redirect(v.appWindow)
 											pcall(coroutine.resume,v.coroutine,"terminate")
 											term.redirect(thisWindow)
+											floatingSystemApps[k] = nil
+											drawApps()
+											drawMain()
 										else
 											local dragOffset = cx - windowX
 											while true do
@@ -1453,6 +1458,7 @@ while true do
 													end
 													v.containerWindow.reposition(event[3] - dragOffset,event[4])
 													sendToProgram = false
+													drawApps()
 													drawMain()
 													for k2,v2 in pairs(floatingSystemApps) do
 														v.containerWindow.redraw()
@@ -1486,6 +1492,9 @@ while true do
 												term.redirect(thisWindow)
 												term.redirect(thisWindow)
 												sendToProgram = false
+												if windowX < event[3] - windowX + 1 or windowY < event[4] - windowY + 1 then
+													drawApps()
+												end
 												drawMain()
 												for k2,v2 in pairs(floatingSystemApps) do
 													v.containerWindow.redraw()
@@ -1503,7 +1512,6 @@ while true do
 									event[4] = event[4] - windowY
 									term.redirect(v.appWindow)
 									pcall(coroutine.resume,v.coroutine,table.unpack(event))
-									term.setCursorBlink(false)
 									term.redirect(thisWindow)
 								end
 							else
@@ -1514,17 +1522,13 @@ while true do
 						if relayToSystemApp and v.isFocused then
 							term.redirect(v.appWindow)
 							pcall(coroutine.resume,v.coroutine,table.unpack(event))
-							term.setCursorBlink(false)
 							term.redirect(thisWindow)
 						end
 					end
 				else
-					for i=1,#floatingSystemApps do
-						if floatingSystemApps[i]["id"] == v.id then
-							floatingSystemApps[i] = nil
-							break
-						end
-					end
+					floatingSystemApps[k] = nil
+					drawApps()
+					drawMain()
 				end
 			end
 			drawMain()
@@ -1542,6 +1546,7 @@ while true do
 			if not settings.noAnim then
 				for i=1,19,3 do
 					programWindow.reposition(1,i)
+					drawApps()
 					drawMain(true)
 					sleep(0.001)
 				end
@@ -1551,6 +1556,7 @@ while true do
 			programWindow = nil
 			runningProgramName = nil
 			drawClock()
+			drawApps()
 			drawMain()
 		else
 			if e == "disk" or e == "disk_eject" then
@@ -1562,12 +1568,14 @@ while true do
 				if not settings.noAnim then
 					for i=1,19,3 do
 						programWindow.reposition(1,i)
+						drawApps()
 						drawMain(true)
 						sleep(0.001)
 					end
 				end
 				programWindow.reposition(1,19)
 				drawClock()
+				drawApps()
 				drawMain()
 			else
 				term.redirect(programWindow)

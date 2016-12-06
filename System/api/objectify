@@ -7,13 +7,9 @@ modes = {
 }
 
 styles = {
-	default = {
-		textView = {
-			textColor = "black",
-			backgroundColor = "inherit",
-		},
-		button = {
-			normal = {
+	default = function()
+		return {
+			textView = {
 				textColor = "black",
 				backgroundColor = "lightGray",
 			},
@@ -21,67 +17,77 @@ styles = {
 				textColor = "gray",
 				backgroundColor = "lightGray",
 			},
-			highlighted = {
-				textColor = "white",
-				backgroundColor = "lightBlue",
+			button = {
+				normal = {
+					textColor = "black",
+					backgroundColor = "lightGray",
+				},
+				disabled = {
+					textColor = "gray",
+					backgroundColor = "lightGray",
+				},
+				highlighted = {
+					textColor = "white",
+					backgroundColor = "lightBlue",
+				},
 			},
-		},
-		textInput = {
-			textColor = "black",
-			backgroundColor = "lightGray",
-			placeholderTextColor = "gray",
-		},
-		dropdown = {
-			normal = {
+			textInput = {
 				textColor = "black",
 				backgroundColor = "lightGray",
+				placeholderTextColor = "gray",
 			},
-			highlighted = {
-				textColor = "white",
-				backgroundColor = "lightBlue",
+			dropdown = {
+				normal = {
+					textColor = "black",
+					backgroundColor = "lightGray",
+				},
+				highlighted = {
+					textColor = "white",
+					backgroundColor = "lightBlue",
+				},
 			},
-		},
-		switch = {
-			offState = {
-				track = {
-					char = string.char(127),
+			switch = {
+				offState = {
+					track = {
+						char = string.char(127),
+						textColor = "lightGray",
+						backgroundColor = "inherit",
+					},
+					knob = {
+						char = " ",
+						textColor = "inherit",
+						backgroundColor = "gray",
+					},
+				},
+				onState = {
+					track = {
+						char = " ",
+						textColor = "inherit",
+						backgroundColor = "lightBlue",
+					},
+					knob = {
+						char = " ",
+						textColor = "inherit",
+						backgroundColor = "gray",
+					},
+				},
+			},
+			selectableList = {
+				normal = {
+					textColor = "black",
+					backgroundColor = "inherit",
+				},
+				highlighted = {
+					textColor = "white",
+					backgroundColor = "lightBlue",
+				},
+				disabled = {
 					textColor = "lightGray",
 					backgroundColor = "inherit",
 				},
-				knob = {
-					char = " ",
-					textColor = "inherit",
-					backgroundColor = "gray",
-				},
-			},
-			onState = {
-				track = {
-					char = " ",
-					textColor = "inherit",
-					backgroundColor = "lightBlue",
-				},
-				knob = {
-					char = " ",
-					textColor = "inherit",
-					backgroundColor = "gray",
-				},
-			},
-		},
-		selectableList = {
-			normal = {
-				textColor = "black",
-				backgroundColor = "inherit",
-			},
-			highlighted = {
-				textColor = "white",
-				backgroundColor = "lightBlue",
-			},
-			disabled = {
-				textColor = "lightGray",
-				backgroundColor = "inherit",
-			},
-		},
-	},
+			}
+		}
+	end,
 }
 
 internals = {
@@ -191,7 +197,7 @@ createObject = {
 		end
 		object.type = "textView"
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		
 		object.hitbox = {
@@ -231,7 +237,7 @@ createObject = {
 			object = tag
 		end
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		if object.enabled == nil then
 			object.enabled = true
@@ -307,7 +313,7 @@ createObject = {
 		end
 		object.type = "textInput"
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		
 		object.hitbox = {
@@ -370,6 +376,10 @@ createObject = {
 			internals.restoreColors(inheritColors)
 		end
 		
+		object.getInput = function()
+			return object.onClick()
+		end
+		
 		return object
 	end,
 	
@@ -390,7 +400,7 @@ createObject = {
 		end
 		object.type = "dropdown"
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		
 		object.hitbox = {
@@ -462,8 +472,18 @@ createObject = {
 		end
 		
 		object.getNewSelection = function()
+			local offset = 0			
+			local function redrawEntries()
+				for i=1,object.maxEntriesShown,1 do
+					paintutils.drawLine(object.posX,object.posY + i,object.posX + object.length,object.posY + i,colors.lightGray)
+					if object.entries[i + offset] then
+						term.setCursorPos(object.posX + 1,object.posY + i)
+						term.setTextColor(colors.black)
+						write(string.sub(object.entries[i + offset],1,object.length - 1))
+					end
+				end
+			end
 			if object.isExpanded then
-				local offset = 0
 				while true do
 					local event = {os.pullEvent()}
 					if event[1] == "mouse_click" then
@@ -488,14 +508,18 @@ createObject = {
 								offset = offset + 1
 							end
 						end
-						for i=1,object.maxEntriesShown,1 do
-							paintutils.drawLine(object.posX,object.posY + i,object.posX + object.length,object.posY + i,colors.lightGray)
-							if object.entries[i + offset] then
-								term.setCursorPos(object.posX + 1,object.posY + i)
-								term.setTextColor(colors.black)
-								write(string.sub(object.entries[i + offset],1,object.length - 1))
+						redrawEntries()
+					elseif event[1] == "key" then
+						if event[2] == keys.up then
+							if offset > 0 then
+								offset = offset -1
+							end
+						elseif event[2] == keys.down then
+							if #object.entries > offset + object.maxEntriesShown then
+								offset = offset + 1
 							end
 						end
+						redrawEntries()
 					end
 				end
 			end
@@ -529,7 +553,7 @@ createObject = {
 		end
 		object.type = "switch"
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		
 		object.hitbox = {
@@ -589,7 +613,7 @@ createObject = {
 		end
 		object.type = "selectableList"
 		if not object.style then
-			object.style = objectify.styles.default
+			object.style = objectify.styles.default()
 		end
 		
 		object.hitbox = {

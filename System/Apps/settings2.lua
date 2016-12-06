@@ -6,6 +6,35 @@
 local objectManager = objectify.objectManager()
 local settings = framework.getSettings()
 
+local style = objectify.styles.default()
+style.switch = {
+	offState = {
+		track = {
+			char = string.char(140),
+			textColor = "lightGray",
+			backgroundColor = "inherit",
+		},
+		knob = {
+			char = " ",
+			textColor = "inherit",
+			backgroundColor = "gray",
+		},
+	},
+	onState = {
+		track = {
+			char = string.char(140),
+			textColor = "lightBlue",
+			backgroundColor = "inherit",
+		},
+		knob = {
+			char = " ",
+			textColor = "inherit",
+			backgroundColor = "blue",
+		},
+	},
+}
+style.selectableList.highlighted.backgroundColor = "lightGray"
+
 objectManager.addObject(objectify.createObject.selectableList("CategoryList",1,1,10,objectify.modes.SINGLE_SELECT,{langStrings.settings_general,langStrings.settings_graphics,langStrings.settings_network}))
 objectManager.getByTag("CategoryList").recalculateHitbox()
 
@@ -22,6 +51,8 @@ objectManager.getByTag("General_Language").setSelectedString(settings.langPack)
 objectManager.getByTag("Graphics_Background").setSelected(settings.background_selected)
 objectManager.getByTag("Graphics_Theme").setSelected(settings.theme)
 
+objectManager.setGlobalStyle(style)
+
 local function redrawScreen()
 	term.setBackgroundColor(colors.white)
 	term.clear()
@@ -29,7 +60,7 @@ local function redrawScreen()
 	alignX = objectManager.getByTag("CategoryList").hitbox.endX + 3
 	local windowX, windowY = term.getSize()
 	for i=1,windowY,1 do
-		term.setCursorPos(objectManager.getByTag("CategoryList").hitbox.endX + 1,i)
+		term.setCursorPos(alignX - 2,i)
 		write(string.char(149))
 	end
 	for k,v in pairs(objectManager.getObjectList()) do
