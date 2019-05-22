@@ -1,13 +1,13 @@
 {
   missingfile = "EmilOS mangler fil: ",
-  missingfile2 = "R: Gendan fil fra disk   S: Start Shell",
+  missingfile2 = "[R] Gendan fil fra disk   [S] Start Shell",
   repair_copyingfile = "Kopierer fil fra disk: /install/",
   repair_copiedfile = "Fil kopieret fra disk, genstarter...",
   repair_filenotfound = "Disken har ikke filen: /install/",
   repair_nodisk = "Der er ikke indsat nogen disk",
   
-  hascrashed = "EmilOS er gået ned!",
-  hascrashed2 = "Systemet vil nu genstarte",
+  hascrashed = "EmilOS stødte på en fejl",
+  hascrashed2 = "Klik for at genstarte",
   
   firstboot_welcome = "Velkommen!",
   firstboot_welcome_2 = "Vælg Land og Sprog",

@@ -11,11 +11,7 @@ styles = {
 		return {
 			textView = {
 				textColor = "black",
-				backgroundColor = "lightGray",
-			},
-			disabled = {
-				textColor = "gray",
-				backgroundColor = "lightGray",
+				backgroundColor = "inherit",
 			},
 			button = {
 				normal = {
@@ -84,6 +80,18 @@ styles = {
 				disabled = {
 					textColor = "lightGray",
 					backgroundColor = "inherit",
+				},
+			},
+			progressBar = {
+				active = {
+					textColor = "lightBlue",
+					backgroundColor = "inherit",
+					char = string.char(140),
+				},
+				inactive = {
+					textColor = "lightGray",
+					backgroundColor = "inherit",
+					char = string.char(140),
 				},
 			}
 		}
@@ -176,6 +184,22 @@ function objectManager() -- Object Manager, for storing and easily interacting w
 			object.style = style
 		end
 	end
+
+	objectManager.loadFromFile = function(path)
+		if fs.exists(path) and not fs.isDir(path) then
+			local f = fs.open(path,"r")
+			if f.readLine() == "//ObjectLayout//" then
+				local rawObjects = textutils.unserialize(f.readAll())
+				for i=1,#rawObjects do
+					objectManager.addObject(objectify.createObject[rawObjects[i]["type"]](rawObjects[i]))
+				end
+				f.close()
+				return true
+			end
+			f.close()
+		end
+		return false
+	end
 	
 	return objectManager
 end
@@ -227,7 +251,6 @@ createObject = {
 			object.tag = tag
 			object.posX = x
 			object.posY = y
-			object.length = tostring(buttonText):len() + 2
 			object.buttonText = tostring(buttonText)
 			object.enabled = enabled
 			object.onClickFunction = onclick
@@ -235,6 +258,9 @@ createObject = {
 			object.display = true
 		elseif type(tag) == "table" then
 			object = tag
+		end
+		if not object.length then
+			object.length = tostring(buttonText):len() + 2
 		end
 		if not object.style then
 			object.style = objectify.styles.default()
@@ -361,7 +387,7 @@ createObject = {
 			end
 			local inputCoroutine = coroutine.create(function() object.input = read(replaceChar) end)
 			coroutine.resume(inputCoroutine)
-			os.queueEvent("paste",object.input)
+			coroutine.resume(inputCoroutine,"paste",object.input)
 			while true do
 				local event = {os.pullEventRaw()}
 				coroutine.resume(inputCoroutine,table.unpack(event))
@@ -373,6 +399,7 @@ createObject = {
 					break
 				end
 			end
+			term.setCursorBlink(false)
 			internals.restoreColors(inheritColors)
 		end
 		
@@ -690,7 +717,67 @@ createObject = {
 				object.recalculateHitbox()
 			end
 		end
+
+		object.getSelected = function()
+			if object.mode == objectify.modes.MULTI_SELECT then
+				return object.selected
+			elseif object.mode == objectify.modes.SINGLE_SELECT then
+				return object.selected[1]
+			end
+		end
 		
+		return object
+	end,
+
+	progressBar = function(tag,x,y,length,value)
+		local object = {}
+		if type(tag) == "string" then
+			object.tag = tag
+			object.posX = x
+			object.posY = y
+			object.length = length or 3
+			object.progress = value or 0
+		elseif type(tag) == "table" then
+			object = tag
+		end
+		object.type = "progressBar"
+		if not object.style then
+			object.style = objectify.styles.default()
+		end
+
+		object.hitbox = {
+			startX = object.posX,
+			startY = object.posY,
+			endX = object.posX + object.length - 1,
+			endY = object.posY
+		}
+
+		object.show = function()
+			local inheritColors = internals.setColors(object.style.progressBar.active)
+			if object.progress > 0 then
+				for i=0,object.progress do
+					term.setCursorPos(object.posX + i,object.posY)
+					write(object.style.progressBar.active.char)
+				end
+			end
+			internals.setColors(object.style.progressBar.inactive)
+			if object.length > object.progress then
+				for i=object.progress,object.length do
+					term.setCursorPos(object.posX + i,object.posY)
+					write(object.style.progressBar.inactive.char)
+				end
+			end
+			internals.restoreColors(inheritColors)
+		end
+
+		object.setProgress = function(progress)
+			if progress and progress <= object.length then
+				object.progress = progress
+				return true
+			end
+			return false
+		end
+
 		return object
 	end
 }

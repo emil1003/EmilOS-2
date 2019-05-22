@@ -1,7 +1,8 @@
  --EmilOS 2
-local version = 2.03
-local versionText = "2.0 Alpha.3"
- --(c) 2016 Emil Inc. All Rights Reserved
+local version = 2.07
+local versionText = "2.0 Alpha.7"
+local buildBranch = "dev"
+ --(c) 2017 Emil Inc. All Rights Reserved
 
  --Locals
 local appX = {5,15,25,35,45,5,15,25,35,45}
@@ -30,9 +31,11 @@ local selectedAppBut = nil
 
  --System apps window managing
 local floatingSystemApps = {}
+local focusedWindow = nil
 
 _G.EmilOS = true
 _G._EMILOS_VERSION = version
+_G._EMILOS_BUILD = {["version"]=version,["versionText"]=versionText,["buildBranch"]=buildBranch}
 _G.customFunctions = {}
 _G._EMILOS_WINDOWS_ENABLED = true
 
@@ -98,16 +101,6 @@ local function drawMainBar()
 	term.setTextColor(colors[settings.topBarTextColor] or colors.black)
 	write("EmilOS")
 	term.setCursorPos(11,1)
-	if isGettingData then
-		term.setTextColor(colors.lightGray)
-		write("-")
-	elseif _G.EmilOSServerUnreachable then
-		term.setTextColor(colors.red)
-		write("*")
-	else
-		term.setTextColor(colors[settings.topBarTextColor] or colors.black)
-		write("*")
-	end
 	paintutils.drawLine(30,1,45,1,colors[settings.topBarColor] or colors.white)
 	term.setCursorPos(45 - textutils.formatTime(os.time(),settings.fullClock):len(),1)
 	term.setTextColor(colors[settings.topBarTextColor] or colors.black)
@@ -252,18 +245,11 @@ local function drawMain(endWithMain)
 			end
 		end
 		if #floatingSystemApps > 0 then
-			local drawLast = nil
 			for k,v in pairs(floatingSystemApps) do
-				if not v.isFocused then
-					v.containerWindow.redraw()
-				else
-					drawLast = v.containerWindow
-				end
+				v.containerWindow.redraw()
 			end
-			if drawLast then
-				drawLast.redraw()
-			else
-				floatingSystemApps[1]["isFocused"] = true
+			if focusedWindow and floatingSystemApps[focusedWindow] then
+				floatingSystemApps[focusedWindow].containerWindow.redraw()
 			end
 		end
 		if endWithMain then
@@ -427,27 +413,31 @@ local function showContext()
 					term.setBackgroundColor(colors[settings.menuBackground] or colors.white)
 					term.setTextColor(colors[settings.menuText] or colors.black)
 					term.setCursorPos(3,2)
-					write(appManifest.name)
-					term.setTextColor(colors[settings.menuInactive] or colors.lightGray)
+					write(appManifest.name.." ")
+					term.setTextColor(colors[settings.topBarTextColor] or colors.lightGray)
+					write("v"..appManifest.version)
 					term.setCursorPos(3,4)
-					write("Version "..appManifest.version)
+					local appSize, dataSize = 0, 0
+					if fs.exists("Apps/data/"..selectedApp) then
+						for k,v in pairs(fs.list("Apps/data/"..selectedApp)) do
+							dataSize = dataSize + fs.getSize("Apps/data/"..selectedApp.."/"..v)
+						end
+					end
+					if fs.exists("Apps/"..selectedApp) then
+						for k,v in pairs(fs.list("Apps/"..selectedApp)) do
+							appSize = appSize + fs.getSize("Apps/"..selectedApp.."/"..v)
+						end
+					end
+					write("App: "..round(appSize / 1024,2).." kB \7 Data: "..round(dataSize / 1024,2).." kB")
 					term.setCursorPos(3,6)
 					term.setBackgroundColor(colors.lightGray)
 					term.setTextColor(colors.black)
 					write(" "..langStrings.context_properties_more.." ")
 					term.setBackgroundColor(colors[settings.menuBackground] or colors.white)
 					term.setTextColor(colors[settings.menuText] or colors.black)
-					term.setCursorPos(3,8)
-					local dataSize = 0
-					if fs.exists("Apps/data/"..selectedApp) then
-						for k,v in pairs(fs.list("Apps/data/"..selectedApp)) do
-							dataSize = dataSize + fs.getSize("Apps/data/"..selectedApp.."/"..v)
-						end
-					end
-					write("Data: "..round(dataSize / 1024,2).." kB")
-					term.setBackgroundColor(colors.lightGray)
-					term.setTextColor(colors.black)
-					term.setCursorPos(3,15)
+					term.setBackgroundColor(colors.red)
+					term.setTextColor(colors.white)
+					term.setCursorPos(42 - #langStrings.context_properties_uninstall,15)
 					write(" "..langStrings.context_properties_uninstall.." ")
 					if appManifest.icon.lowRes or appManifest.icon.highRes then
 						if not _HOST or not blittle or not appManifest.icon.highRes then
@@ -486,32 +476,30 @@ local function showContext()
 						local e, but, cx, cy = framework.eventHandler()
 						if e == "mouse_click" then
 							if cx >= 4 and cx <= 48 and cy >= 13 - expanderModifier then
-								if cx >= 6 and cx <= 8 + langStrings.context_properties_more:len() and cy == 18 then
-									if not propertiesExpanded then
-										local previousWindow = term.redirect(propertiesWindow)
-										paintutils.drawLine(1,6,44,6,colors[settings.menuBackground] or colors.white)
-										term.redirect(previousWindow)									
-										propertiesExpanded = true
-										expanderModifier = 9									
-										if not settings.noAnim then
-											for i=11,5,-2 do
-												propertiesWindow.reposition(4,i)
-												sleep(0.05)
-											end
+								if cx >= 6 and cx <= 8 + langStrings.context_properties_more:len() and cy == 18 and not propertiesExpanded then
+									local previousWindow = term.redirect(propertiesWindow)
+									paintutils.drawLine(1,6,44,6,colors[settings.menuBackground] or colors.white)
+									term.redirect(previousWindow)									
+									propertiesExpanded = true
+									expanderModifier = 9									
+									if not settings.noAnim then
+										for i=11,5,-2 do
+											propertiesWindow.reposition(4,i)
+											sleep(0.05)
 										end
-										propertiesWindow.reposition(4,4)
-										if settings.noAnim then
-											propertiesWindow.redraw()
-										end
-										drawClock()
-									else
-										if emilworks.popupMsg(colors.lime,"6","","Vil du afinstallere",selectedApp.."?") then
-											fs.delete("Apps/"..selectedApp)
-											getInstalledApps()
-											drawApps(true)
-										end
-										break
 									end
+									propertiesWindow.reposition(4,4)
+									if settings.noAnim then
+										propertiesWindow.redraw()
+									end
+									drawClock()
+								elseif cx >= 45 - #langStrings.context_properties_uninstall and cx <= 47 + #langStrings.context_properties_uninstall and cy == 18 and propertiesExpanded then
+									if emilworks.popupMsg(colors.lime,"6","","Vil du afinstallere",selectedApp.."?") then
+										fs.delete("Apps/"..selectedApp)
+										getInstalledApps()
+										drawApps(true)
+									end
+									break
 								end
 							else
 								if not settings.noAnim then
@@ -599,6 +587,9 @@ local function showContext()
 	end
 end
 local function openSidebar(bSidebarIsOpen)
+
+	--crash() -- MUST BE DELETED LATER
+
 	if not sidebarWindow then
 		sidebarWindow = window.create(term.current(),37,2,15,18,false)
 	end
@@ -741,6 +732,7 @@ local function showSearchBar()
 	local searchString = ""
 	local returnList = {}
 	local didDoShadows = false
+	local queuedFunc = nil
 	if not settings.noAnim then
 		for i=3,11,2 do
 			appsWindow.reposition(1,i)
@@ -881,17 +873,7 @@ local function showSearchBar()
 							programFocused = true
 							runningProgramName = returnList[1]
 						end
-						appsWindow.reposition(1,2)
 						term.setCursorBlink(false)
-					elseif fs.exists("System/Apps/"..returnList[1]) then
-						if returnList[1] == langStrings.settings_appname then
-							launchSystemApp.settings()
-						elseif returnList[1] == langStrings.appstore_appname then
-							launchSystemApp.appStore()
-						elseif returnList[1] == langStrings.emilosmenu_shell then
-							launchSystemApp.shell()
-						end
-						appsWindow.reposition(1,2)
 					else
 						if returnList[1] == "CD" then
 							os.queueEvent("mouse_click",1,49,1)
@@ -904,12 +886,19 @@ local function showSearchBar()
 								os.shutdown()
 							end
 						end
-						appsWindow.reposition(1,2)
+					end
+					appsWindow.reposition(1,2)
+					if returnList[1] == langStrings.settings_appname then
+						queuedFunc = ".settings"
+					elseif returnList[1] == langStrings.appstore_appname then
+						queuedFunc = ".appStore"
+					elseif returnList[1] == langStrings.emilosmenu_shell then
+						queuedFunc = ".shell"
 					end
 					exitedProgram = true
 					drawMain()
 					ClockID = os.startTimer(0.2)
-					break
+					return queuedFunc
 				end
 			elseif par1 == 15 then
 				term.setCursorBlink(false)
@@ -1021,12 +1010,14 @@ local function handleAppClickEvent()
 end
 local function addSystemApp(object)
 	term.redirect(object.containerWindow)
-	paintutils.drawLine(1,1,object.containerWindow.getSize(),1,colors[settings.topBarColor] or colors.white)
+	paintutils.drawLine(1,1,object.containerWindow.getSize(),1,colors[settings.windowBorderColor] or colors.white)
 	term.setCursorPos(3,1)
-	term.setTextColor(colors[settings.topBarTextColor] or colors.black)
+	term.setTextColor(colors[settings.windowBorderTextColor] or colors.black)
 	write(object.name)
-	term.setCursorPos(object.containerWindow.getSize() - 2,1)
+	term.setCursorPos(object.containerWindow.getSize() - 1,1)
 	write("x")
+	term.setCursorPos(object.containerWindow.getSize() - 4,1)
+	write(string.char(30))
 	term.redirect(object.appWindow)
 	coroutine.resume(object.coroutine)
 	term.redirect(thisWindow)
@@ -1036,31 +1027,43 @@ end
 local launchSystemApp = {
 	settings = function()
 		local settingsCoroutine = coroutine.create(function() shell.run("/System/Apps/settings2.lua") end)
-		local settingsWindowContainer = window.create(term.current(),2,3,30,16)
-		local settingsWindow = window.create(settingsWindowContainer,1,2,30,15)
+		local settingsWindowContainer = window.create(term.current(),2,3,30,14)
+		local settingsWindow = window.create(settingsWindowContainer,1,2,30,13)
 		addSystemApp({
-			["coroutine"] = settingsCoroutine,
-			["containerWindow"] = settingsWindowContainer,
-			["appWindow"] = settingsWindow,
-			["order"] = 1,
-			["name"] = langStrings.emilosmenu_settings,
-			["id"] = math.random(),
-			["isFocused"] = false,
+			coroutine = settingsCoroutine,
+			containerWindow = settingsWindowContainer,
+			appWindow = settingsWindow,
+			isMaximized = false,
+			previousSize = {
+				startX = 2,
+				startY = 3,
+				endX = 30,
+				endY = 14
+			},
+			name = langStrings.emilosmenu_settings,
+			id = math.random(),
+			isFocused = false,
 		})
 		settingsCoroutine, settingsWindowContainer, settingsWindow = nil, nil, nil
 	end,
 	appStore = function()
-		local appStoreCoroutine = coroutine.create(function() shell.run("/System/Apps/appStore") end)
-		local appStoreWindowContainer = window.create(term.current(),1,2,51,18)
-		local appStoreWindow = window.create(appStoreWindowContainer,1,2,51,17)
+		local appStoreCoroutine = coroutine.create(function() shell.run("/System/Apps/appStore2.lua") end)
+		local appStoreWindowContainer = window.create(term.current(),2,3,32,16)
+		local appStoreWindow = window.create(appStoreWindowContainer,1,2,32,15)
 		addSystemApp({
-			["coroutine"] = appStoreCoroutine,
-			["containerWindow"] = appStoreWindowContainer,
-			["appWindow"] = appStoreWindow,
-			["order"] = 1,
-			["name"] = langStrings.emilosmenu_appstore,
-			["id"] = math.random(),
-			["isFocused"] = false,
+			coroutine = appStoreCoroutine,
+			containerWindow = appStoreWindowContainer,
+			appWindow = appStoreWindow,
+			isMaximized = false,
+			previousSize = {
+				startX = 1,
+				startY = 2,
+				endX = 32,
+				endY = 16
+			},
+			name = langStrings.emilosmenu_appstore,
+			id = math.random(),
+			isFocused = false,
 		})
 		appStoreCoroutine, appStoreWindowContainer, appStoreWindow = nil, nil, nil
 	end,
@@ -1069,13 +1072,19 @@ local launchSystemApp = {
 		local shellWindowContainer = window.create(term.current(),2,3,30,12)
 		local shellWindow = window.create(shellWindowContainer,1,2,30,11)
 		addSystemApp({
-			["coroutine"] = shellCoroutine,
-			["containerWindow"] = shellWindowContainer,
-			["appWindow"] = shellWindow,
-			["order"] = 1,
-			["name"] = langStrings.emilosmenu_shell,
-			["id"] = math.random(),
-			["isFocused"] = false,
+			coroutine = shellCoroutine,
+			containerWindow = shellWindowContainer,
+			appWindow = shellWindow,
+			isMaximized = false,
+			previousSize = {
+				startX = 2,
+				startY = 3,
+				endX = 30,
+				endY = 12
+			},
+			name = langStrings.emilosmenu_shell,
+			id = math.random(),
+			isFocused = false,
 		})
 		shellCoroutine, shellWindowContainer, shellWindow = nil, nil, nil
 	end
@@ -1135,7 +1144,7 @@ while true do
 					else
 						pText = "("..os.version()..")"
 					end
-					emilworks.popupMsg(colors.lime,"3","","EmilOS "..versionText,pText,"","(c) 2016 Emil Inc.")
+					emilworks.popupMsg(colors.lime,"3","","EmilOS "..versionText,pText,"","(c) 2018 Emil Inc.")
 					parallel.waitForAny(function() os.pullEvent("mouse_click") end,function() os.pullEvent("key") end)
 				elseif cB == 3 then
 					launchSystemApp.settings()
@@ -1145,13 +1154,11 @@ while true do
 					launchSystemApp.shell()
 				elseif cB == 7 then
 					if emilworks.popupMsg(colors.lime,"6","",langStrings.emilos_rebootnow) == true then
-						os.queueEvent("reboot")
-						return
+						os.reboot()
 					end
 				elseif cB == 8 then
 					if emilworks.popupMsg(colors.lime,"6","",langStrings.emilos_shutdownnow) == true then
-						os.queueEvent("shutdown")
-						return
+						os.shutdown()
 					end
 				end
 				clicked = true
@@ -1174,7 +1181,14 @@ while true do
 				term.setBackgroundColor(colors[settings.menuHighlight] or colors.lightBlue)
 				term.setTextColor(colors.white)
 				write(" "..string.char(12).." ")
-				showSearchBar()
+				local qf = showSearchBar()
+				if qf == ".settings" then
+					launchSystemApp.settings()
+				elseif qf == ".appStore" then
+					launchSystemApp.appStore()
+				elseif qf == ".shell" then
+					launchSystemApp.shell()
+				end
 				relayToSystemApp = false
 			elseif cx == 50 and cy == 1 or e == "key" and but == 157 then
 				if _G.bPopup then
@@ -1411,12 +1425,14 @@ while true do
 			if #floatingSystemApps > 0 then
 				for k,v in pairs(floatingSystemApps) do
 					term.redirect(v.containerWindow)
-					paintutils.drawLine(1,1,v.containerWindow.getSize(),1,colors[settings.topBarColor] or colors.white)
+					paintutils.drawLine(1,1,v.containerWindow.getSize(),1,colors[settings.windowBorderColor] or colors.white)
 					term.setCursorPos(3,1)
-					term.setTextColor(colors[settings.topBarTextColor] or colors.black)
+					term.setTextColor(colors[settings.windowBorderTextColor] or colors.black)
 					write(v.name)
-					term.setCursorPos(v.containerWindow.getSize() - 2,1)
+					term.setCursorPos(v.containerWindow.getSize() - 1,1)
 					write("x")
+					term.setCursorPos(v.containerWindow.getSize() - 4,1)
+					write(string.char(30))
 					term.redirect(thisWindow)
 				end
 			end
@@ -1427,99 +1443,134 @@ while true do
 		
 		pcall(function()
 			local sendCallToAppList = true
-			for k,v in pairs(floatingSystemApps) do
+			for k,v in ipairs(floatingSystemApps) do
 				if coroutine.status(v.coroutine) ~= "dead" then
 					local windowX, windowY = v.containerWindow.getPosition()
 					local windowSizeX, windowSizeY = v.containerWindow.getSize()
 					if string.sub(event[1],1,5) == "mouse" then
 						if cx >= windowX and cx <= windowX + windowSizeX - 1 and cy >= windowY and cy <= windowY + windowSizeY - 1 then
-							if v.isFocused then
-								for k2,v2 in pairs(floatingSystemApps) do
-									v2.isFocused = false
-								end
-								v.isFocused = true
-								sendCallToAppList = false
-								if cy == windowY then
-									if e == "mouse_click" then
-										if cx == windowX + windowSizeX - 3 then
-											term.redirect(v.appWindow)
-											pcall(coroutine.resume,v.coroutine,"terminate")
-											term.redirect(thisWindow)
-											floatingSystemApps[k] = nil
-											drawApps()
-											drawMain()
+							focusedWindow = k
+							sendCallToAppList = false
+							if cy == windowY then
+								if e == "mouse_click" then
+									if cx == windowX + windowSizeX - 2 then
+										term.redirect(v.appWindow)
+										pcall(coroutine.resume,v.coroutine,"terminate")
+										term.redirect(thisWindow)
+										floatingSystemApps[k] = nil
+										drawApps()
+										drawMain()
+									elseif cx == windowX + windowSizeX - 5 then
+										local termX, termY = term.getSize()
+										if v.isMaximized then
+											v.containerWindow.reposition(
+												v.previousSize.startX,
+												v.previousSize.startY,
+												v.previousSize.endX,
+												v.previousSize.endY
+											)
+											v.appWindow.reposition(
+												1,
+												2,
+												v.previousSize.endX,
+												v.previousSize.endY - 1
+											)
 										else
-											local dragOffset = cx - windowX
-											while true do
-												local event = {os.pullEvent()}
-												if event[1] == "mouse_drag" then
-													if event[4] == 1 then
-														event[4] = 2
-													end
-													v.containerWindow.reposition(event[3] - dragOffset,event[4])
-													sendToProgram = false
-													drawApps()
-													drawMain()
-													for k2,v2 in pairs(floatingSystemApps) do
-														v.containerWindow.redraw()
-													end
-													v.containerWindow.redraw()
-												elseif event[1] == "timer" and event[2] == ClockID then
-													drawClock()
-												elseif event[1] == "mouse_up" then
-													break
-												end
-											end
+											v.previousSize.startX, v.previousSize.startY = v.containerWindow.getPosition()
+											v.previousSize.endX, v.previousSize.endY = v.containerWindow.getSize()
+											v.containerWindow.reposition(1,2,termX,termY - 1)
+											v.appWindow.reposition(1,2,termX,termY - 2)
 										end
-									end
-								elseif cx == windowX + windowSizeX - 1 and cy == windowY + windowSizeY - 1 then
-									while true do
-										local event = {os.pullEvent()}
-										if event[1] == "mouse_drag" then
-											if event[3] - windowX + 1 > 4 and event[4] - windowY + 1 > 4 then
-												v.containerWindow.reposition(windowX,windowY,event[3] - windowX + 1,event[4] - windowY + 1)
-												v.appWindow.reposition(1,2,event[3] - windowX + 1,event[4] - windowY)
-												local newSizeX = v.containerWindow.getSize()
-												term.redirect(v.containerWindow)
-												paintutils.drawLine(1,1,newSizeX,1,colors[settings.topBarColor] or colors.white)
-												term.setTextColor(colors[settings.topBarTextColor] or colors.black)
-												term.setCursorPos(3,1)
-												write(v.name)
-												term.setCursorPos(newSizeX - 2,1)
-												write("x")
-												term.redirect(v.appWindow)
-												pcall(coroutine.resume,v.coroutine,"term_resize")
-												term.redirect(thisWindow)
-												term.redirect(thisWindow)
-												sendToProgram = false
-												if windowX < event[3] - windowX + 1 or windowY < event[4] - windowY + 1 then
-													drawApps()
+										local newSizeX = v.containerWindow.getSize()
+										term.redirect(v.containerWindow)
+										paintutils.drawLine(1,1,newSizeX,1,colors[settings.windowBorderColor] or colors.white)
+										term.setTextColor(colors[settings.windowBorderTextColor] or colors.black)
+										term.setCursorPos(3,1)
+										write(v.name)
+										term.setCursorPos(newSizeX - 1,1)
+										write("x")
+										term.setCursorPos(newSizeX - 4,1)
+										write(string.char(30))
+										term.redirect(v.appWindow)
+										pcall(coroutine.resume,v.coroutine,"term_resize")
+										term.redirect(thisWindow)
+										v.isMaximized = not v.isMaximized
+										sendToProgram = false
+										drawApps()
+										v.containerWindow.redraw()
+									else
+										local dragOffset = cx - windowX
+										while true do
+											local event = {os.pullEvent()}
+											if event[1] == "mouse_drag" then
+												if event[4] == 1 then
+													event[4] = 2
 												end
+												v.containerWindow.reposition(event[3] - dragOffset,event[4])
+												sendToProgram = false
+												drawApps()
 												drawMain()
+												if v.isMaximized then
+													v.isMaximized = false
+												end
 												for k2,v2 in pairs(floatingSystemApps) do
 													v.containerWindow.redraw()
 												end
 												v.containerWindow.redraw()
+											elseif event[1] == "timer" and event[2] == ClockID then
+												drawClock()
+											elseif event[1] == "mouse_up" then
+												break
 											end
-										elseif event[1] == "timer" and event[2] == ClockID then
-											drawClock()
-										elseif event[1] == "mouse_up" then
-											break
 										end
 									end
-								else
-									event[3] = event[3] - windowX + 1
-									event[4] = event[4] - windowY
-									term.redirect(v.appWindow)
-									pcall(coroutine.resume,v.coroutine,table.unpack(event))
-									term.redirect(thisWindow)
+								end
+							elseif cx == windowX + windowSizeX - 1 and cy == windowY + windowSizeY - 1 then
+								while true do
+									local event = {os.pullEvent()}
+									if event[1] == "mouse_drag" then
+										if event[3] - windowX + 1 > 4 and event[4] - windowY + 1 > 4 then
+											v.containerWindow.reposition(windowX,windowY,event[3] - windowX + 1,event[4] - windowY + 1)
+											v.appWindow.reposition(1,2,event[3] - windowX + 1,event[4] - windowY)
+											local newSizeX = v.containerWindow.getSize()
+											term.redirect(v.containerWindow)
+											paintutils.drawLine(1,1,newSizeX,1,colors[settings.windowBorderColor] or colors.white)
+											term.setTextColor(colors[settings.windowBorderTextColor] or colors.black)
+											term.setCursorPos(3,1)
+											write(v.name)
+											term.setCursorPos(newSizeX - 1,1)
+											write("x")
+											term.setCursorPos(newSizeX - 4,1)
+											write(string.char(30))
+											term.redirect(v.appWindow)
+											pcall(coroutine.resume,v.coroutine,"term_resize")
+											term.redirect(thisWindow)
+											sendToProgram = false
+											if windowX < event[3] - windowX + 1 or windowY < event[4] - windowY + 1 then
+												drawApps()
+											end
+											drawMain()
+											for k2,v2 in pairs(floatingSystemApps) do
+												v.containerWindow.redraw()
+											end
+											v.containerWindow.redraw()
+										end
+									elseif event[1] == "timer" and event[2] == ClockID then
+										drawClock()
+									elseif event[1] == "mouse_up" then
+										break
+									end
 								end
 							else
-								v.isFocused = true
+								event[3] = event[3] - windowX + 1
+								event[4] = event[4] - windowY
+								term.redirect(v.appWindow)
+								pcall(coroutine.resume,v.coroutine,table.unpack(event))
+								term.redirect(thisWindow)
 							end
 						end
 					else
-						if relayToSystemApp and v.isFocused then
+						if relayToSystemApp and focusedWindow == k then
 							term.redirect(v.appWindow)
 							pcall(coroutine.resume,v.coroutine,table.unpack(event))
 							term.redirect(thisWindow)

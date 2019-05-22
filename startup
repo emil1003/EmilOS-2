@@ -163,7 +163,6 @@ while true do
 			term.clear()
 			term.setTextColor(colors.white)
 			term.setCursorPos(1,1)
-			printCentered("--- EmilOS Single-User Mode ---",1)
 			sleep(0.2)
 			if settings.password then
 				write("Password:")
@@ -188,7 +187,7 @@ while true do
 				term.setCursorPos(1,1)
 				printCentered("--- EmilOS Recovery mode ---",1)
 				print("")
-				printCentered("What would you like to do?",3)
+				printCentered("Select a command",3)
 				print("[1] Reset personal settings")
 				print("[2] Reset EmilOS to factory settings")
 				print("[3] Wipe computer")
@@ -982,25 +981,41 @@ if settings.password then
 end
 
  --Run EmilOS and catch exit codes. If none, then assume fatal error, display error screen
-shell.run("EmilOS")
-if not verbose then
-	timer = os.startTimer(0.05)
+local err = nil
+local env = {}
+setmetatable(env,{__index = _G})
+local f = loadfile("/EmilOS",env)
+if verbose then
+	local count = 0
 	while true do
-		e, par1 = os.pullEvent()
-		if e == "shutdown" then
-			os.shutdown()
-		elseif e == "reboot" then
-			os.reboot()
-		elseif e == "timer" and par1 == timer then
-			term.redirect(term.native())
-			term.setBackgroundColor(colors.white)
-			term.setTextColor(colors.black)
-			term.clear()
-			printCentered(langStrings.hascrashed,9)
-			term.setTextColor(colors.gray)
-			printCentered(langStrings.hascrashed2,11)
-			sleep(2)
-			os.reboot()
+		_, err = pcall(f)
+		if err then
+			count = count + 1
+			if count == 5 then
+				break
+			end
 		end
+		sleep(0.5)
 	end
+else
+	nrmlState = pcall(shell.run,"/EmilOS")
+end
+if err or nrmlState then
+	term.redirect(term.native())
+	term.setBackgroundColor(colors.white)
+	term.setTextColor(colors.black)
+	term.clear()
+	printCentered(langStrings.hascrashed,9)
+	term.setTextColor(colors.gray)
+	printCentered(langStrings.hascrashed2,11)
+	if err then
+		term.setCursorPos(2,17)
+		term.setTextColor(colors.lightGray)
+		write("Fejlkode")
+		term.setCursorPos(2,18)
+		write(tostring(err))
+	end
+	sleep(0.05)
+	parallel.waitForAny(function() os.pullEvent("key") end, function() os.pullEvent("mouse_click") end)
+	os.reboot()
 end
